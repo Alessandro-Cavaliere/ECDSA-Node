@@ -1,22 +1,47 @@
 import { useState } from "react";
 import server from "./server";
+import * as secp from "ethereum-cryptography/secp256k1";
+import { keccak256 } from "ethereum-cryptography/keccak";
 
-function Transfer({ address, setBalance }) {
+function Transfer({ address, setBalance, privateKey }) {
   const [sendAmount, setSendAmount] = useState("");
   const [recipient, setRecipient] = useState("");
+  const [signature, setSignature] = useState();
+  const [hashedMessage, setHashedMessage] = useState();
 
-  const setValue = (setter) => (evt) => setter(evt.target.value);
+  const setAmount = (setter) => (evt) => {
+    setter(evt.target.value);
+  };
+
+  const setValue = (setter) => async (evt) => {
+    const message = {
+      receiver: evt.target.value,
+      amount: sendAmount,
+      timestamp: Date.now(),
+    };
+    const messageBytes = new Uint8Array(message);
+    const messageHash = keccak256(messageBytes);
+    ì;
+    setHashedMessage(messageHash);
+    const signature = await secp.sign(messageHash, privateKey, {
+      recovered: true,
+      extraEntropy: true,
+    });
+    setSignature(signature);
+    setter(evt.target.value);
+  };
 
   async function transfer(evt) {
     evt.preventDefault();
-
     try {
       const {
         data: { balance },
       } = await server.post(`send`, {
         sender: address,
         amount: parseInt(sendAmount),
+        signature: signature,
         recipient,
+        message: hashedMessage,
       });
       setBalance(balance);
     } catch (ex) {
@@ -33,15 +58,14 @@ function Transfer({ address, setBalance }) {
         <input
           placeholder="1, 2, 3..."
           value={sendAmount}
-          onChange={setValue(setSendAmount)}
+          onChange={setAmount(setSendAmount)}
         ></input>
       </label>
 
       <label>
         Recipient
         <input
-          placeholder="Type an address, for example: 0x2"
-          value={recipient}
+          placeholder="Type a public key referred to an account"
           onChange={setValue(setRecipient)}
         ></input>
       </label>
